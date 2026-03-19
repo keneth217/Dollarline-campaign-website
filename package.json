@@ -16,11 +16,13 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.47.0",
+    "@vercel/analytics": "^2.0.1",
     "pinia": "^3.0.4",
     "vue": "^3.5.29",
     "vue-router": "^5.0.3"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
     "@tsconfig/node24": "^24.0.4",
     "@types/node": "^24.11.0",
     "@vitejs/plugin-vue": "^6.0.4",
@@ -35,7 +37,6 @@
     "npm-run-all2": "^8.0.4",
     "oxfmt": "^0.35.0",
     "oxlint": "~1.50.0",
-    "@tailwindcss/postcss": "^4.0.0",
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.2",
     "typescript": "~5.9.3",
