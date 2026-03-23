@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { supabase } from '@/lib/supabase'
+import { maskKenyanPhone, normalizePhoneKE } from '@/lib/phone'
 
 const props = defineProps<{ modelValue: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
@@ -29,6 +30,16 @@ async function handleSubmit() {
     return
   }
 
+  const phoneRaw = (phone ?? '').trim()
+  const phoneNormalized = phoneRaw ? normalizePhoneKE(phoneRaw) : null
+  if (phoneRaw && !phoneNormalized) {
+    message.value = {
+      type: 'error',
+      text: 'Enter a valid Kenyan number (e.g. 07XX XXX XXX or +2547XX XXX XXX).',
+    }
+    return
+  }
+
   if (!supabase) {
     message.value = {
       type: 'error',
@@ -41,19 +52,29 @@ async function handleSubmit() {
   try {
     const { error } = await supabase.from('volunteers').insert({
       name: name.trim(),
-      phone: (phone ?? '').trim() || null,
+      // Full normalized digits stored here — UNIQUE applies to this value, not the mask
+      phone: phoneNormalized,
       email: (email ?? '').trim() ? (email ?? '').trim().toLowerCase() : null,
     })
 
     if (error) {
       if (error.code === '23505') {
-        message.value = { type: 'error', text: 'This phone number is already registered.' }
+        message.value = {
+          type: 'error',
+          text: phoneNormalized
+            ? `This number is already registered (${maskKenyanPhone(phoneNormalized)}).`
+            : 'This phone number is already registered.',
+        }
         return
       }
       throw error
     }
 
-    message.value = { type: 'success', text: 'Thank you! We have received your details.' }
+    const thanks =
+      phoneNormalized != null
+        ? `Thank you! We have your details (${maskKenyanPhone(phoneNormalized)}).`
+        : 'Thank you! We have received your details.'
+    message.value = { type: 'success', text: thanks }
     form.value = { name: '', phone: '', email: '', agree: false }
     setTimeout(() => close(), 1500)
   } catch (err: unknown) {

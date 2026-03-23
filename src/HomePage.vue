@@ -7,11 +7,13 @@
     ───────────────────────────────────────── -->
     <section id="hero" class="hero" ref="heroRef">
 
-      <!-- Faded background images: 1.jpeg, dolar2.png, 3.jpeg in public/ -->
+      <!-- Sides merge/fade toward center; center layer stacked on top -->
       <div class="hero__bg-images" aria-hidden="true">
-        <div class="hero__bg-img hero__bg-img--1" />
-        <div class="hero__bg-img hero__bg-img--2" />
-        <div class="hero__bg-img hero__bg-img--3" />
+        <div class="hero__bg-sides">
+          <div class="hero__bg-img hero__bg-img--left" />
+          <div class="hero__bg-img hero__bg-img--right" />
+        </div>
+        <div class="hero__bg-img hero__bg-img--center" />
       </div>
 
       <!-- Animated background layers -->
@@ -331,10 +333,11 @@ import { supabase } from '@/lib/supabase'
 
 const showVolunteerModal = ref(false)
 const volunteerCount = ref(0)
-const SUPPORTER_BASE = 3857
+/** Loaded from `campaign_stats.supporter_base` via RPC; fallback if RPC/table missing */
+const supporterBase = ref(16897)
 
 const stats = computed(() => [
-  { value: (SUPPORTER_BASE + volunteerCount.value).toLocaleString(), label: 'Supporters' },
+  { value: (supporterBase.value + volunteerCount.value).toLocaleString(), label: 'Supporters' },
   { value: '4', label: 'Wards Reached' },
   { value: '5', label: 'Pillars of Change' },
   { value: '1', label: 'Clear Vision' },
@@ -380,16 +383,32 @@ onMounted(() => {
   // Hero fires immediately
   setTimeout(() => { heroVisible.value = true }, 100)
 
-  // Fetch volunteer count and subscribe to realtime for supporter count
+  // Supporter total = supporter_base (DB) + volunteer rows; refresh on new volunteer
   if (supabase) {
-    const fetchCount = async () => {
-      const { data, error } = await supabase.rpc('get_volunteer_count')
-      if (!error && data != null) volunteerCount.value = Number(data)
+    const fetchStats = async () => {
+      const { data, error } = await supabase.rpc('get_public_campaign_stats')
+      let payload = data
+      if (!error && typeof data === 'string') {
+        try {
+          payload = JSON.parse(data)
+        } catch {
+          payload = null
+        }
+      }
+      if (!error && payload && typeof payload === 'object') {
+        const row = /** @type {{ volunteer_count?: number; supporter_base?: number }} */ (payload)
+        if (row.volunteer_count != null) volunteerCount.value = Number(row.volunteer_count)
+        if (row.supporter_base != null) supporterBase.value = Number(row.supporter_base)
+        return
+      }
+      // Legacy: RPC not deployed yet
+      const { data: countOnly, error: countErr } = await supabase.rpc('get_volunteer_count')
+      if (!countErr && countOnly != null) volunteerCount.value = Number(countOnly)
     }
-    fetchCount()
+    fetchStats()
     const channel = supabase
       .channel('volunteers-count')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'volunteers' }, fetchCount)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'volunteers' }, fetchStats)
       .subscribe()
     onUnmounted(() => { supabase.removeChannel(channel) })
   }
@@ -595,37 +614,134 @@ const newsPreview = [
   overflow: hidden;
 }
 
-/* faded background images – 1.jpeg, 2.jpeg, 3.jpeg in public/ */
+/* Sides: two halves that fade toward the middle (merged / soft seam) */
 .hero__bg-images {
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
+  overflow: hidden;
+  min-height: 100%;
+}
+
+.hero__bg-sides {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
 }
 
 .hero__bg-img {
-  position: absolute;
-  inset: 0;
+  min-height: 100%;
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  opacity: 0.18;
 }
 
-.hero__bg-img--1 {
+.hero__bg-img--left,
+.hero__bg-img--right {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  opacity: 0.26;
+  filter: blur(1.25px) saturate(0.82) brightness(1.04);
+}
+
+/* Fade each side toward center so they blend where they meet */
+.hero__bg-img--left {
   background-image: url('/1.jpeg');
+  background-position: 58% 45%;
+  margin-right: -12%;
+  mask-image: linear-gradient(
+    to right,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.85) 38%,
+    rgba(0, 0, 0, 0.35) 72%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.85) 38%,
+    rgba(0, 0, 0, 0.35) 72%,
+    rgba(0, 0, 0, 0) 100%
+  );
 }
 
-.hero__bg-img--2 {
+.hero__bg-img--right {
+  background-image: url('/3.jpeg');
+  background-position: 48% 35%;
+  margin-left: -12%;
+  mask-image: linear-gradient(
+    to left,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.85) 38%,
+    rgba(0, 0, 0, 0.35) 72%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to left,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.85) 38%,
+    rgba(0, 0, 0, 0.35) 72%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
+/* Center portrait: sits above both sides (higher z-index), full clarity */
+.hero__bg-img--center {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: min(62%, 760px);
+  z-index: 1;
   background-image: url('/dolar2.png');
-  opacity: 0.12;
-  background-position: 60% 40%;
+  opacity: 0.58;
+  filter: contrast(1.08) saturate(1.06);
+  background-position: 50% 36%;
+  background-size: cover;
+  box-shadow:
+    -32px 0 64px -20px rgba(255, 255, 255, 0.55),
+    32px 0 64px -20px rgba(255, 255, 255, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.12);
+  /* Soft vertical edges so it meets the faded sides cleanly */
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 6%,
+    black 94%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 6%,
+    black 94%,
+    transparent 100%
+  );
 }
 
-.hero__bg-img--3 {
-  background-image: url('/profile.jpeg');
-  opacity: 0.1;
-  background-position: 20% 80%;
+@media (max-width: 768px) {
+  .hero__bg-sides {
+    display: none;
+  }
+  .hero__bg-img--center {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: none;
+    transform: none;
+    opacity: 0.3;
+    background-position: 55% 35%;
+    mask-image: none;
+    -webkit-mask-image: none;
+    box-shadow: none;
+  }
 }
 
 /* background grid */
@@ -639,11 +755,11 @@ const newsPreview = [
   pointer-events: none;
 }
 
-/* radial glow */
+/* radial glow — centered to lift the middle panel */
 .hero__radial {
   position: absolute; inset: 0;
   z-index: 1;
-  background: radial-gradient(ellipse 70% 55% at 65% 50%, rgba(201,162,39,.08) 0%, transparent 68%);
+  background: radial-gradient(ellipse 52% 58% at 50% 48%, rgba(201,162,39,.1) 0%, transparent 62%);
   pointer-events: none;
 }
 

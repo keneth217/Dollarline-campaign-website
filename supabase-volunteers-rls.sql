@@ -1,5 +1,7 @@
 -- Run this in Supabase Dashboard → SQL Editor
--- 1) RLS policy for insert. 2) Unique phone. 3) Function for supporter count. Enable Realtime: Database → Replication → volunteers (ON).
+-- 1) RLS policy for insert. 2) Unique phone (full normalized value from app). 3) Volunteer count RPC.
+-- Also run supabase-campaign-stats.sql for supporter_base + get_public_campaign_stats().
+-- Enable Realtime: Database → Replication → volunteers (ON).
 
 -- Policy: allow anyone to insert a volunteer row (for the Join/Volunteer modal)
 create policy "Allow anon to insert volunteers"
